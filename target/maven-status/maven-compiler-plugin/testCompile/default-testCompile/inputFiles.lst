@@ -1,6 +1,6 @@
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/hardcoded/HardcodedConfigSteps.java
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/hardcoded/RunCucumberTest.java
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/properties/PropertiesConfigSteps.java
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/properties/RunCucumberTest.java
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/repository/RepositoryConfigSteps.java
-/home/robert/IdeaProjects/config/src/test/java/com/jrobertgardzinski/config/source/repository/RunCucumberTest.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/hardcoded/HardcodedConfigSteps.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/hardcoded/RunCucumberTest.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/properties/PropertiesConfigSteps.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/properties/RunCucumberTest.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/repository/RepositoryConfigSteps.java
+/home/robert/git/portfolio/config/src/test/java/com/jrobertgardzinski/config/source/repository/RunCucumberTest.java
