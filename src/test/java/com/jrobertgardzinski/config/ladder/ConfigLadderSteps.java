@@ -23,7 +23,7 @@ public class ConfigLadderSteps {
     private int defaultValue;
     private boolean liveLevel;
 
-    private Integer answer;
+    private Resolution<Integer> answer;
     private Throwable declarationFailure;
 
     @Given("the validation gate accepts only values of at least {int}")
@@ -53,14 +53,19 @@ public class ConfigLadderSteps {
         properties.put(name, value);
     }
 
+    @Given("the property {string} is unset")
+    public void thePropertyIsUnset(String name) {
+        properties.remove(name);
+    }
+
     @Given("the database row {string} holds {int}")
     public void theDatabaseRowHolds(String name, int value) {
         databaseRows.put(name, value);
     }
 
-    @When("the ladder resolves")
-    public void theLadderResolves() {
-        answer = buildLadder().resolve();
+    @Given("the database row {string} is absent")
+    public void theDatabaseRowIsAbsent(String name) {
+        databaseRows.remove(name);
     }
 
     @When("a live key {string} is declared with default {int}")
@@ -71,9 +76,31 @@ public class ConfigLadderSteps {
         declarationFailure = catchThrowable(this::buildLadder);
     }
 
+    /** Resolution is a side-effect-free query, so the scenarios skip the When and the Then asks. */
+    private Resolution<Integer> answer() {
+        if (answer == null)
+            answer = buildLadder().resolution();
+        return answer;
+    }
+
     @Then("the ladder answers {int}")
     public void theLadderAnswers(int expected) {
-        assertThat(answer).isEqualTo(expected);
+        assertThat(answer().value()).isEqualTo(expected);
+    }
+
+    @Then("the answer comes from the {string} rung")
+    public void theAnswerComesFromTheRung(String source) {
+        assertThat(answer().source()).isEqualTo(source);
+    }
+
+    @Then("no rung was refused")
+    public void noRungWasRefused() {
+        assertThat(answer().rejected()).isEmpty();
+    }
+
+    @Then("the {string} rung was refused holding {int} because {string}")
+    public void theRungWasRefused(String source, int held, String reason) {
+        assertThat(answer().rejected()).contains(new Resolution.Rejected<>(source, held, reason));
     }
 
     @Then("the declaration is rejected")

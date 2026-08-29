@@ -7,6 +7,7 @@ import com.jrobertgardzinski.config.source.live.LiveConfigSource;
 import com.jrobertgardzinski.config.source.rebuild.RebuildConfigSource;
 import com.jrobertgardzinski.config.source.restart.RestartConfigSource;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -35,7 +36,9 @@ import java.util.function.Supplier;
  * <p>The default is a mandatory argument validated eagerly, so {@link #resolve()} always has an
  * answer. Every candidate passes the same {@code gate} (typically a value-object constructor);
  * a rung whose value the gate rejects — a hand-edited database row, a typo in a property — is
- * logged and skipped, and the ladder falls through to the next rung.
+ * logged and skipped, and the ladder falls through to the next rung. {@link #resolution()} tells
+ * that story in full — the winning rung and every refusal on the way — for whoever has to
+ * explain to an administrator why the value they wrote is not the value in force.
  *
  * <p>Resolution happens per {@link #resolve()} call and the ladder keeps no state: WHEN and HOW
  * OFTEN to ask is the caller's business. A use case asks per invocation and takes that snapshot
@@ -44,6 +47,10 @@ import java.util.function.Supplier;
 public final class ConfigLadder<T> {
 
     private static final System.Logger LOG = System.getLogger(ConfigLadder.class.getName());
+
+    public static final String LIVE_SOURCE = "live (database)";
+    public static final String RESTART_SOURCE = "restart (properties/env)";
+    public static final String REBUILD_SOURCE = "rebuild (default)";
 
     private record Rung<T>(String source, Supplier<Optional<T>> value) {
     }
@@ -67,31 +74,38 @@ public final class ConfigLadder<T> {
                                            LiveConfigSource<T> live,
                                            RestartConfigSource<T> restart) {
         return new ConfigLadder<>(name, defaultValue, gate, List.of(
-                new Rung<>("live (database)", () -> live.resolve(new LiveConfigKey<>(name))),
-                new Rung<>("restart (properties/env)", () -> restart.resolve(new RestartConfigKey<>(name)))));
+                new Rung<>(LIVE_SOURCE, () -> live.resolve(new LiveConfigKey<>(name))),
+                new Rung<>(RESTART_SOURCE, () -> restart.resolve(new RestartConfigKey<>(name)))));
     }
 
     /** A key whose change is a deployment concern: restart over rebuild, no live rung. */
     public static <T> ConfigLadder<T> restart(String name, T defaultValue, Consumer<T> gate,
                                               RestartConfigSource<T> restart) {
         return new ConfigLadder<>(name, defaultValue, gate, List.of(
-                new Rung<>("restart (properties/env)", () -> restart.resolve(new RestartConfigKey<>(name)))));
+                new Rung<>(RESTART_SOURCE, () -> restart.resolve(new RestartConfigKey<>(name)))));
     }
 
     public T resolve() {
+        return resolution().value();
+    }
+
+    /** The answer together with its provenance: which rung answered, which rungs were refused and why. */
+    public Resolution<T> resolution() {
+        List<Resolution.Rejected<T>> rejected = new ArrayList<>();
         for (Rung<T> rung : rungs) {
             Optional<T> candidate = rung.value().get();
             if (candidate.isEmpty())
                 continue;
             try {
                 gate.accept(candidate.get());
-                return candidate.get();
+                return new Resolution<>(candidate.get(), rung.source(), rejected);
             } catch (IllegalArgumentException illegal) {
                 LOG.log(System.Logger.Level.WARNING,
                         "illegal value for ''{0}'' at the {1} rung ({2}) - falling through",
                         name, rung.source(), illegal.getMessage());
+                rejected.add(new Resolution.Rejected<>(rung.source(), candidate.get(), illegal.getMessage()));
             }
         }
-        return rebuild.resolve(new RebuildConfigKey<>(name, defaultValue));
+        return new Resolution<>(rebuild.resolve(new RebuildConfigKey<>(name, defaultValue)), REBUILD_SOURCE, rejected);
     }
 }
