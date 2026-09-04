@@ -33,16 +33,18 @@ import java.util.function.Supplier;
  *       correction.</li>
  * </ul>
  *
- * <p>The default is a mandatory argument validated eagerly, so {@link #resolve()} always has an
- * answer. Every candidate passes the same {@code gate} (typically a value-object constructor);
- * a rung whose value the gate rejects — a hand-edited database row, a typo in a property — is
- * logged and skipped, and the ladder falls through to the next rung. {@link #resolution()} tells
- * that story in full — the winning rung and every refusal on the way — for whoever has to
- * explain to an administrator why the value they wrote is not the value in force.
+ * <p>Every candidate passes the same {@code gate} (typically a value-object constructor), but
+ * WHEN depends on what the rung is bound to. The default and the property are fixed before the
+ * process serves, so they are gated when the ladder is declared: an illegal one refuses to build
+ * the ladder, and a misconfigured deployment fails at startup with the key, the rung, the value
+ * and the reason — never on a request. Only the live rung is read per {@link #resolve()}, and
+ * only it can be refused: a hand-edited database row is logged, skipped, and the ladder falls
+ * through to the property or the default. {@link #resolution()} tells that story — the winning
+ * rung and the refusal on the way — for whoever has to explain to an administrator why the row
+ * they wrote is not the value in force.
  *
- * <p>Resolution happens per {@link #resolve()} call and the ladder keeps no state: WHEN and HOW
- * OFTEN to ask is the caller's business. A use case asks per invocation and takes that snapshot
- * through the whole operation; wiring code may ask once at startup.
+ * <p>The ladder keeps no state about the live rung: WHEN and HOW OFTEN to ask is the caller's
+ * business. A use case asks per invocation and takes that snapshot through the whole operation.
  */
 public final class ConfigLadder<T> {
 
@@ -52,60 +54,70 @@ public final class ConfigLadder<T> {
     public static final String RESTART_SOURCE = "restart (properties/env)";
     public static final String REBUILD_SOURCE = "rebuild (default)";
 
-    private record Rung<T>(String source, Supplier<Optional<T>> value) {
-    }
-
     private final String name;
     private final T defaultValue;
     private final Consumer<T> gate;
-    private final List<Rung<T>> rungs;
+    private final Optional<T> restartValue;
+    private final Optional<Supplier<Optional<T>>> live;
     private final RebuildConfigSource rebuild = new RebuildConfigSource();
 
-    private ConfigLadder(String name, T defaultValue, Consumer<T> gate, List<Rung<T>> rungs) {
+    private ConfigLadder(String name, T defaultValue, Consumer<T> gate,
+                         Optional<Supplier<Optional<T>>> live, Optional<T> restartCandidate) {
         gate.accept(defaultValue);   // the terminal rung must be legal, or there is no ladder at all
+        restartCandidate.ifPresent(value -> {
+            try {
+                gate.accept(value);
+            } catch (IllegalArgumentException illegal) {
+                throw new IllegalArgumentException(
+                        "illegal value for '" + name + "' at the " + RESTART_SOURCE + " rung (" + value + "): "
+                                + illegal.getMessage(), illegal);
+            }
+        });
         this.name = name;
         this.defaultValue = defaultValue;
         this.gate = gate;
-        this.rungs = rungs;
+        this.live = live;
+        this.restartValue = restartCandidate;
     }
 
     /** A key whose value may change while the system runs: live over restart over rebuild. */
     public static <T> ConfigLadder<T> live(String name, T defaultValue, Consumer<T> gate,
                                            LiveConfigSource<T> live,
                                            RestartConfigSource<T> restart) {
-        return new ConfigLadder<>(name, defaultValue, gate, List.of(
-                new Rung<>(LIVE_SOURCE, () -> live.resolve(new LiveConfigKey<>(name))),
-                new Rung<>(RESTART_SOURCE, () -> restart.resolve(new RestartConfigKey<>(name)))));
+        return new ConfigLadder<>(name, defaultValue, gate,
+                Optional.of(() -> live.resolve(new LiveConfigKey<>(name))),
+                restart.resolve(new RestartConfigKey<>(name)));
     }
 
     /** A key whose change is a deployment concern: restart over rebuild, no live rung. */
     public static <T> ConfigLadder<T> restart(String name, T defaultValue, Consumer<T> gate,
                                               RestartConfigSource<T> restart) {
-        return new ConfigLadder<>(name, defaultValue, gate, List.of(
-                new Rung<>(RESTART_SOURCE, () -> restart.resolve(new RestartConfigKey<>(name)))));
+        return new ConfigLadder<>(name, defaultValue, gate,
+                Optional.empty(),
+                restart.resolve(new RestartConfigKey<>(name)));
     }
 
     public T resolve() {
         return resolution().value();
     }
 
-    /** The answer together with its provenance: which rung answered, which rungs were refused and why. */
+    /** The answer together with its provenance: which rung answered, and the live rung's refusal if there was one. */
     public Resolution<T> resolution() {
         List<Resolution.Rejected<T>> rejected = new ArrayList<>();
-        for (Rung<T> rung : rungs) {
-            Optional<T> candidate = rung.value().get();
-            if (candidate.isEmpty())
-                continue;
+        Optional<T> candidate = live.flatMap(Supplier::get);
+        if (candidate.isPresent()) {
             try {
                 gate.accept(candidate.get());
-                return new Resolution<>(candidate.get(), rung.source(), rejected);
+                return new Resolution<>(candidate.get(), LIVE_SOURCE, rejected);
             } catch (IllegalArgumentException illegal) {
                 LOG.log(System.Logger.Level.WARNING,
                         "illegal value for ''{0}'' at the {1} rung ({2}) - falling through",
-                        name, rung.source(), illegal.getMessage());
-                rejected.add(new Resolution.Rejected<>(rung.source(), candidate.get(), illegal.getMessage()));
+                        name, LIVE_SOURCE, illegal.getMessage());
+                rejected.add(new Resolution.Rejected<>(LIVE_SOURCE, candidate.get(), illegal.getMessage()));
             }
         }
+        if (restartValue.isPresent())
+            return new Resolution<>(restartValue.get(), RESTART_SOURCE, rejected);
         return new Resolution<>(rebuild.resolve(new RebuildConfigKey<>(name, defaultValue)), REBUILD_SOURCE, rejected);
     }
 }

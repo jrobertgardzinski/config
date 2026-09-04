@@ -76,6 +76,14 @@ public class ConfigLadderSteps {
         declarationFailure = catchThrowable(this::buildLadder);
     }
 
+    @When("a restart key {string} is declared with default {int}")
+    public void aRestartKeyIsDeclaredWithDefault(String name, int def) {
+        keyName = name;
+        defaultValue = def;
+        liveLevel = false;
+        declarationFailure = catchThrowable(this::buildLadder);
+    }
+
     /** Resolution is a side-effect-free query, so the scenarios skip the When and the Then asks. */
     private Resolution<Integer> answer() {
         if (answer == null)

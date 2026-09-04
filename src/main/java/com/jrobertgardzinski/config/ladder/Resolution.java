@@ -4,8 +4,9 @@ import java.util.List;
 
 /**
  * What a {@link ConfigLadder} found on the way to its answer: the value, the rung that supplied
- * it, and every rung above that held a value the gate refused — in climbing order, each with the
- * gate's own reason. An empty {@code rejected} list is a clean climb. A caller that only wants
+ * it, and the live rung above it if it held a value the gate refused, with the gate's own reason
+ * (the property and the default cannot be refused here — they are gated when the ladder is
+ * declared). An empty {@code rejected} list is a clean climb. A caller that only wants
  * the value takes {@link #value()}; a caller that reports on configuration (an operator's
  * endpoint, a startup summary) has the whole story without re-resolving.
  */
