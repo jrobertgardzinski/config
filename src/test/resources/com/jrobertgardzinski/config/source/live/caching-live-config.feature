@@ -1,7 +1,7 @@
 Feature: Caching decorator over the live source
 
   A TTL decorator over the live port — the same contract with bounded staleness, which is what
-  keeps the rung honestly LIVE: within the TTL the cached answer is served, absence included;
+  keeps the level honestly LIVE: within the TTL the cached answer is served, absence included;
   once the TTL elapses the next read asks the database again. A zero TTL switches caching off.
   Which call sites read through the decorator and which through the bare adapter is a wiring
   decision, never part of the port's contract.

@@ -7,8 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * TTL decorator over a {@link LiveConfigPort} — the same contract with bounded staleness, which
- * is exactly what keeps the rung LIVE in the promised sense: within the TTL the cached answer is
- * served, ABSENCE included (a vacant rung costs no repeated round trips, and a row's appearance
+ * is exactly what keeps the level LIVE in the promised sense: within the TTL the cached answer is
+ * served, ABSENCE included (a vacant level costs no repeated round trips, and a row's appearance
  * is noticed within one TTL exactly like a change). A zero TTL switches caching off entirely,
  * turning the decorator into plain delegation.
  *
