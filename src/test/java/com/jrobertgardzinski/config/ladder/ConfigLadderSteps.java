@@ -11,6 +11,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -21,6 +24,27 @@ public class ConfigLadderSteps {
     private final Map<String, Integer> properties = new HashMap<>();
     private final LiveConfigPort<Integer> rows = databaseRows::get;
     private final RestartConfigPort<Integer> props = properties::get;
+    /** The same two levels as TEXT, the way a properties file and a settings table hold them. */
+    private final Map<String, String> textRows = new HashMap<>();
+    private final Map<String, String> textProperties = new HashMap<>();
+    private final LiveConfigPort<String> rowsAsText = textRows::get;
+    private final RestartConfigPort<String> propsAsText = textProperties::get;
+    private final List<LogRecord> warnings = new ArrayList<>();
+    private final Handler collectWarnings = new Handler() {
+        @Override
+        public void publish(LogRecord record) {
+            if (record.getLevel().intValue() >= java.util.logging.Level.WARNING.intValue())
+                warnings.add(record);
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+        }
+    };
 
     private Consumer<Integer> gate;
     private String keyName;
@@ -59,6 +83,26 @@ public class ConfigLadderSteps {
     @Given("the property {string} is set to {int}")
     public void thePropertyIsSetTo(String name, int value) {
         properties.put(name, value);
+    }
+
+    @Given("a ladder for {string} over text rungs live, restart and rebuild default {int}")
+    public void aLadderOverText(String name, int def) {
+        declare(name, List.of(Rung.live(rowsAsText, Parse::integer), Rung.restart(propsAsText, Parse::integer), Rung.rebuild(def)));
+    }
+
+    @Given("the text property {string} is set to {string}")
+    public void theTextPropertyIsSetTo(String name, String value) {
+        textProperties.put(name, value);
+    }
+
+    @Given("the text row {string} holds {string}")
+    public void theTextRowHolds(String name, String value) {
+        textRows.put(name, value);
+    }
+
+    @When("a ladder for {string} is declared over text rungs live, restart and rebuild default {int}")
+    public void aLadderOverTextIsDeclared(String name, int def) {
+        declareNow(name, List.of(Rung.live(rowsAsText, Parse::integer), Rung.restart(propsAsText, Parse::integer), Rung.rebuild(def)));
     }
 
     @Given("the property {string} is unset")
@@ -135,7 +179,35 @@ public class ConfigLadderSteps {
 
     @Then("the {string} level was refused holding {int} because {string}")
     public void theLevelWasRefused(String source, int held, String reason) {
-        assertThat(answer().rejected()).contains(new Resolution.Rejected<>(source, held, reason));
+        assertThat(answer().rejected()).contains(new Resolution.Rejected(source, held, reason));
+    }
+
+    @Then("the {string} level was refused holding the text {string}")
+    public void theLevelWasRefusedHoldingTheText(String source, String held) {
+        assertThat(answer().rejected()).singleElement().satisfies(rejected -> {
+            assertThat(rejected.source()).isEqualTo(source);
+            assertThat(rejected.value()).isEqualTo(held);
+        });
+    }
+
+    @When("the ladder is asked {int} times")
+    public void theLadderIsAskedTimes(int times) {
+        Logger logger = Logger.getLogger(RungLadder.class.getName());
+        logger.addHandler(collectWarnings);
+        try {
+            ConfigLadder<Integer> ladder = buildLadder();
+            for (int i = 0; i < times; i++) {
+                answer = ladder.resolution();
+            }
+        } finally {
+            logger.removeHandler(collectWarnings);
+        }
+    }
+
+    @Then("the refusal was logged once")
+    public void theRefusalWasLoggedOnce() {
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.getFirst().getMessage()).contains("illegal value");
     }
 
     @Then("the declaration is rejected")

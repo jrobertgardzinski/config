@@ -67,6 +67,39 @@ Feature: Configuration ladder
       Then the answer comes from the "restart (properties/env)" level
       And the "live (database)" level was refused holding 3 because "value must be at least 5"
 
+  Rule: a text source is parsed on its rung, and text that is not the type is refused like an illegal value
+
+    # A properties file and a settings table both hold text. The type enters on the rung, through
+    # a parser, and the parser's refusal follows the same law as the gate's: at declaration for a
+    # level bound before serving, per resolution — skipped, reported — for the live one.
+
+    Scenario: text on every level is parsed and the latest bound wins
+      Given a ladder for "min.length" over text rungs live, restart and rebuild default 8
+      And the text property "min.length" is set to " 12 "
+      And the text row "min.length" holds "10"
+      Then the ladder answers 10
+
+    Scenario: a row that is not a number is refused, reported with the text it held, and falls through
+      Given a ladder for "min.length" over text rungs live, restart and rebuild default 8
+      And the text property "min.length" is set to "12"
+      And the text row "min.length" holds "ten"
+      Then the ladder answers 12
+      And the "live (database)" level was refused holding the text "ten"
+
+    Scenario: a property that is not a number refuses to build the ladder
+      Given the text property "min.length" is set to "twelve"
+      When a ladder for "min.length" is declared over text rungs live, restart and rebuild default 8
+      Then the declaration is rejected naming the "restart (properties/env)" level
+
+  Rule: a refused row is logged once, not once per question
+
+    Scenario: the same illegal row asked a thousand times is one line in the log
+      Given a ladder for "min.length" with rungs live, restart and rebuild default 8
+      And the database row "min.length" holds 3
+      When the ladder is asked 1000 times
+      Then the ladder answers 8
+      And the refusal was logged once
+
   Rule: what is bound before the process serves must be legal, or there is no ladder
 
     Scenario: an illegal default refuses to build the ladder
