@@ -68,3 +68,20 @@ Feature: A deployment's configuration declares a ladder from the rule the code s
       Given the property "sample.mode" is "sloppy"
       When the mode is bound over the shipped rule
       Then the declaration is refused naming "sample.mode" and the "restart (properties/env)" level
+
+  Rule: the keys declared live form the catalogue of what the running system may be told
+
+    Scenario: a declared key holds text through the rule's own parser and gate
+      When the floor is read live over the shipped rule
+      Then the catalogue lists "sample.floor"
+      And "sample.floor" told "8" holds 8
+      And "sample.floor" told "3" is refused because "floor must be at least 5"
+      And "sample.floor" told "eight" is refused because "'eight' is not the type this key takes"
+
+    Scenario: a key nobody declared is not in the catalogue
+      When the floor is read live over the shipped rule
+      Then the catalogue does not list "sample.strict"
+
+    Scenario: a rule bound over the shipped rule is not live and is not in the catalogue
+      When the strictness is bound over the shipped rule
+      Then the catalogue does not list "sample.strict"

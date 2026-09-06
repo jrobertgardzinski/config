@@ -184,4 +184,29 @@ public class ConfigurationSteps {
                 .hasMessageContaining(key)
                 .hasMessageContaining(level);
     }
+
+    @Then("the catalogue lists {string}")
+    public void theCatalogueLists(String key) {
+        assertThat(configuration.liveKeys()).containsKey(key);
+        assertThat(configuration.liveKey(key)).isPresent();
+    }
+
+    @Then("the catalogue does not list {string}")
+    public void theCatalogueDoesNotList(String key) {
+        assertThat(configuration.liveKeys()).doesNotContainKey(key);
+        assertThat(configuration.liveKey(key)).isEmpty();
+    }
+
+    @Then("{string} told {string} holds {int}")
+    public void toldHolds(String key, String text, int value) {
+        assertThat(configuration.liveKey(key).orElseThrow().holding(text)).isEqualTo(new Floor(value));
+    }
+
+    @Then("{string} told {string} is refused because {string}")
+    public void toldIsRefused(String key, String text, String reason) {
+        LiveKey live = configuration.liveKey(key).orElseThrow();
+        assertThat(catchThrowable(() -> live.holding(text)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining(reason);
+    }
 }
