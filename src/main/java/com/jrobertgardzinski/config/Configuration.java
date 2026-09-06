@@ -6,7 +6,8 @@ import com.jrobertgardzinski.config.ladder.Rung;
 import com.jrobertgardzinski.config.source.live.LiveConfigPort;
 import com.jrobertgardzinski.config.source.restart.RestartConfigPort;
 
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 
 /**
@@ -34,22 +35,31 @@ public final class Configuration {
 
     /** A ladder over the three levels, answering with the rule holding the value in force. */
     public <T, V extends ConfigValue<T>> ConfigLadder<V> liveOver(V shipped) {
-        Function<String, T> parser = Parse.forType(shipped.defaultValue().getClass());
-        return ConfigLadder.of(shipped.key(), gateOf(shipped),
-                        Rung.live(rows, parser), Rung.restart(properties, parser), Rung.rebuild(shipped.defaultValue()))
-                .map(value -> holding(shipped, value));
+        return ladder(shipped, Rung.live(rows, parserOf(shipped)));
     }
 
     /** The rule as the deployment binds it: its property over the shipped default, decided now. */
     public <T, V extends ConfigValue<T>> V boundOver(V shipped) {
-        Function<String, T> parser = Parse.forType(shipped.defaultValue().getClass());
-        T value = ConfigLadder.of(shipped.key(), gateOf(shipped),
-                Rung.restart(properties, parser), Rung.rebuild(shipped.defaultValue())).resolve();
-        return holding(shipped, value);
+        return ladder(shipped).resolve();
     }
 
-    private static <T, V extends ConfigValue<T>> Consumer<T> gateOf(V shipped) {
-        return value -> shipped.holding(value);
+    /**
+     * Every ladder ends the same way - the property over the shipped default - and answers in
+     * the rule's own type; what sits above is the caller's choice. The gate is the rule's
+     * constructor, through {@code holding}: a candidate it refuses is reported with the value
+     * it held, so the refusal stays a number in the report, not the text it was parsed from.
+     */
+    @SafeVarargs
+    private <T, V extends ConfigValue<T>> ConfigLadder<V> ladder(V shipped, Rung<T>... above) {
+        List<Rung<T>> rungs = new ArrayList<>(List.of(above));
+        rungs.add(Rung.restart(properties, parserOf(shipped)));
+        rungs.add(Rung.rebuild(shipped.defaultValue()));
+        return ConfigLadder.of(shipped.key(), value -> shipped.holding(value), rungs)
+                .map(value -> holding(shipped, value));
+    }
+
+    private static <T, V extends ConfigValue<T>> Function<String, T> parserOf(V shipped) {
+        return Parse.forType(shipped.defaultValue().getClass());
     }
 
     /** {@code holding} answers with the rule's own type - a law in every library holds that promise. */

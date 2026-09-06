@@ -34,6 +34,10 @@ public interface ConfigLadder<T> {
         return new RungLadder<>(key, gate, List.of(rungs));
     }
 
+    static <T> ConfigLadder<T> of(String key, Consumer<T> gate, List<Rung<T>> rungs) {
+        return new RungLadder<>(key, gate, rungs);
+    }
+
     /** The same ladder answering in another type: the value mapped, the provenance untouched. */
     default <U> ConfigLadder<U> map(Function<T, U> f) {
         ConfigLadder<T> self = this;
