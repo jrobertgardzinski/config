@@ -2,6 +2,7 @@ package com.jrobertgardzinski.config.ladder;
 
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * One key, resolved over a ladder of rungs: the level bound latest in the lifecycle wins. A
@@ -31,5 +32,22 @@ public interface ConfigLadder<T> {
     @SafeVarargs
     static <T> ConfigLadder<T> of(String key, Consumer<T> gate, Rung<T>... rungs) {
         return new RungLadder<>(key, gate, List.of(rungs));
+    }
+
+    /** The same ladder answering in another type: the value mapped, the provenance untouched. */
+    default <U> ConfigLadder<U> map(Function<T, U> f) {
+        ConfigLadder<T> self = this;
+        return new ConfigLadder<>() {
+            @Override
+            public String key() {
+                return self.key();
+            }
+
+            @Override
+            public Resolution<U> resolution() {
+                Resolution<T> resolved = self.resolution();
+                return new Resolution<>(f.apply(resolved.value()), resolved.source(), resolved.rejected());
+            }
+        };
     }
 }
