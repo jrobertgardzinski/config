@@ -4,39 +4,17 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class SnapshotLiveConfigSteps {
 
     private final Map<String, String> table = new HashMap<>();
     private int reads;
     private boolean unreadable;
-
-    private Instant now = Instant.parse("2026-01-01T10:00:00Z");
-    private final Clock steerableClock = new Clock() {
-        @Override
-        public ZoneId getZone() {
-            return ZoneOffset.UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now;
-        }
-    };
 
     private SnapshotLiveConfigPort snapshot;
 
@@ -47,37 +25,32 @@ public class SnapshotLiveConfigSteps {
         return new HashMap<>(table);
     }
 
-    @Given("a settings table where {string} is {string} and a snapshot TTL of {int} seconds")
-    public void aSettingsTableWhereIs(String name, String value, int ttlSeconds) {
+    @Given("a settings table where {string} is {string}")
+    public void aSettingsTableWhereIs(String name, String value) {
         table.put(name, value);
-        snapshot = new SnapshotLiveConfigPort(this::readTable, Duration.ofSeconds(ttlSeconds), steerableClock);
+        snapshot = new SnapshotLiveConfigPort(this::readTable);
     }
 
-    @Given("a settings table where {string} is {string} and {string} is {string} and a snapshot TTL of {int} seconds")
-    public void aSettingsTableWhereIsAndIs(String name, String value, String other, String otherValue, int ttlSeconds) {
+    @Given("a settings table where {string} is {string} and {string} is {string}")
+    public void aSettingsTableWhereIsAndIs(String name, String value, String other, String otherValue) {
         table.put(name, value);
         table.put(other, otherValue);
-        snapshot = new SnapshotLiveConfigPort(this::readTable, Duration.ofSeconds(ttlSeconds), steerableClock);
+        snapshot = new SnapshotLiveConfigPort(this::readTable);
     }
 
-    @Given("an empty settings table and a snapshot TTL of {int} seconds")
-    public void anEmptySettingsTable(int ttlSeconds) {
-        snapshot = new SnapshotLiveConfigPort(this::readTable, Duration.ofSeconds(ttlSeconds), steerableClock);
+    @Given("an empty settings table")
+    public void anEmptySettingsTable() {
+        snapshot = new SnapshotLiveConfigPort(this::readTable);
     }
 
-    @Given("the snapshot has already answered once")
-    public void theSnapshotHasAlreadyAnsweredOnce() {
-        snapshot.find("min.length");
+    @Given("an unreadable settings table")
+    public void anUnreadableSettingsTable() {
+        unreadable = true;
     }
 
     @When("the table's {string} changes to {string}")
     public void theTablesChangesTo(String name, String value) {
         table.put(name, value);
-    }
-
-    @When("{int} seconds pass")
-    public void secondsPass(int seconds) {
-        now = now.plusSeconds(seconds);
     }
 
     @When("the snapshot is asked for {string} and {string} and {string}")
@@ -97,9 +70,15 @@ public class SnapshotLiveConfigSteps {
         unreadable = true;
     }
 
-    @When("the table becomes readable again")
-    public void theTableBecomesReadableAgain() {
-        unreadable = false;
+    @Then("the snapshot cannot be taken")
+    public void theSnapshotCannotBeTaken() {
+        assertThatThrownBy(() -> new SnapshotLiveConfigPort(this::readTable))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Then("the writer's refresh fails")
+    public void theWritersRefreshFails() {
+        assertThatThrownBy(snapshot::refresh).isInstanceOf(IllegalStateException.class);
     }
 
     @Then("the table was read once")
